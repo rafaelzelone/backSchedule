@@ -9,11 +9,11 @@ import logRoutes from "./log.routes";
 const router = Router();
 
 
-router.use("back/auth", authRoutes);
-router.use("back/rooms", roomRoutes); 
+router.use("/back/auth", authRoutes);
+router.use("/back/rooms", roomRoutes); 
 
-router.use("back/clients", clientRoutes);
-router.use("back/schedules", schedulingRoutes);
-router.use("back/logs", logRoutes);
+router.use("/back/clients", clientRoutes);
+router.use("/back/schedules", schedulingRoutes);
+router.use("/back/logs", logRoutes);
 
 export default router;
