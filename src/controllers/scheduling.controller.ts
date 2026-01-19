@@ -11,9 +11,10 @@ export class SchedulingController {
 
   static async create(req: AuthRequest, res: Response) {
     try {
-      const { date, clientId, roomId } = req.body;
+      const { date, roomId } = req.body;
 
-      if (!date || !clientId || !roomId) {
+
+      if (!date || req.user!.id || !roomId) {
         return res.status(400).json({
           message: "Data, cliente e sala são obrigatórios",
         });
@@ -21,8 +22,7 @@ export class SchedulingController {
 
       const client = await Customer.findOne({
         where: {
-          id: clientId,
-          userId: req.user!.id,
+          userId: req.user!.id
         },
       });
 
@@ -32,7 +32,6 @@ export class SchedulingController {
         });
       }
 
-      // Verifica conflito de agendamento existente
       const conflict = await Scheduling.findOne({
         where: {
           roomId,
@@ -47,10 +46,9 @@ export class SchedulingController {
         });
       }
 
-      // ==== NOVO: verifica se existe scheduleTime válido ====
       const scheduleDate = new Date(date);
-      const dayOfWeek = scheduleDate.getDay(); // 0 = Domingo, 1 = Segunda, ...
-      const time = scheduleDate.toTimeString().split(" ")[0]; // "HH:MM:SS"
+      const dayOfWeek = scheduleDate.getDay(); 
+      const time = scheduleDate.toTimeString().split(" ")[0];
 
       const validScheduleTime = await ScheduleTime.findOne({
         where: {

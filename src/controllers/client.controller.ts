@@ -44,13 +44,12 @@ export class ClientController {
       const offset = (page - 1) * pageSize;
       const limit = pageSize;
 
-      // Buscar clientes e incluir o usuário relacionado
       const { rows: clients, count: total } = await Customer.findAndCountAll({
         where: { userId: req.user!.id },
         include: [
           {
             model: User,
-            as: "user", // ⚠️ alias definido no belongsTo
+            as: "user",
             attributes: ["id", "email", "firstName", "lastName", "active"],
           },
         ],
@@ -78,14 +77,13 @@ export class ClientController {
 
   static async getClientByUserId(req: AuthRequest, res: Response) {
     try {
-      const userId = req.user!.id; // pegar userId do token
-      // Buscar cliente associado ao usuário
+      const userId = req.user!.id;
       const client = await Customer.findOne({
         where: { userId },
         include: [
           {
             model: User,
-            as: "user", // ⚠️ o alias definido no belongsTo
+            as: "user",
             attributes: ["id", "email", "firstName", "lastName", "active"],
           },
         ],
@@ -126,7 +124,6 @@ export class ClientController {
     try {
       const { id } = req.params;
 
-      // Buscar cliente com o usuário associado
       const client = await Customer.findOne({
         where: { id, userId: req.user!.id },
         include: [{ model: User, as: "user" }],
@@ -138,7 +135,6 @@ export class ClientController {
 
       let typeActivity: TypeActivity | null = null;
 
-      // Atualizar endereço
       const addressFieldsChanged =
         (CEP && CEP !== client.CEP) ||
         (street && street !== client.street) ||
@@ -153,13 +149,10 @@ export class ClientController {
         typeActivity = TypeActivity.UPDATEADRESS;
       }
 
-      // Atualizar email
       if (email && email !== client.user!.email) {
         await client.user!.update({ email });
         typeActivity = TypeActivity.UPDATEEMAIL;
       }
-
-
 
       if (typeActivity) {
         await createLog({
