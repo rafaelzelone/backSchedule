@@ -6,6 +6,7 @@ const router = Router();
 
 router.post("/", authMiddleware, ClientController.create);
 router.get("/", authMiddleware, ClientController.list);
+router.get("/me", authMiddleware, ClientController.getClientByUserId);
 router.get("/:id", authMiddleware, ClientController.findById);
 router.put("/:id", authMiddleware, ClientController.update);
 router.delete("/:id", authMiddleware, ClientController.delete);

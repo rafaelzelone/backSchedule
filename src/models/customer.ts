@@ -1,5 +1,6 @@
+// customer.ts
 import { DataTypes, Model, Optional } from "sequelize";
-import { sequelize } from "../config/database"
+import { sequelize } from "../config/database";
 import { User } from "./user";
 
 interface CustomerAttributes {
@@ -12,11 +13,11 @@ interface CustomerAttributes {
   city: string;
   state: string;
   userId: string;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
-
-interface CustomerCreationAttributes
-  extends Optional<CustomerAttributes, "id"> {}
+interface CustomerCreationAttributes extends Optional<CustomerAttributes, "id"> {}
 
 export class Customer
   extends Model<CustomerAttributes, CustomerCreationAttributes>
@@ -31,8 +32,13 @@ export class Customer
   public city!: string;
   public state!: string;
   public userId!: string;
-}
 
+  public createdAt?: Date;
+  public updatedAt?: Date;
+
+  // ⚠️ Adicione esta linha para que TypeScript reconheça a associação
+  public user?: User;
+}
 
 Customer.init(
   {
@@ -56,4 +62,3 @@ Customer.init(
   { sequelize, tableName: "customers" }
 );
 
-Customer.belongsTo(User, { foreignKey: "userId" });

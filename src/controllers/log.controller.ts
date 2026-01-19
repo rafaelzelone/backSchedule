@@ -1,43 +1,56 @@
 import { Response } from "express";
 import { AuthRequest } from "../middlewares/auth.middleware";
-import { Log, Customer } from "../models";
+import { Log, User, Customer } from "../models";
 
 export class LogController {
 
   static async list(req: AuthRequest, res: Response) {
     try {
+      // Apenas admins podem acessar
       if (!req.user?.admin) {
         return res.status(403).json({
           message: "Apenas administradores podem visualizar logs",
         });
       }
 
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = (page - 1) * limit;
+      // Paginação
+      const page = parseInt(req.query.page as string) || 1;
+      const pageSize = parseInt(req.query.pageSize as string) || 20;
+      const offset = (page - 1) * pageSize;
+      const limit = pageSize;
 
-      const { rows: logs, count } = await Log.findAndCountAll({
+      // Busca logs com usuário e cliente usando os aliases corretos
+      const { rows: logs, count: total } = await Log.findAndCountAll({
         include: [
           {
+            model: User,
+            as: "logUser",
+            attributes: ["id", "firstName", "lastName", "email"],
+          },
+          {
             model: Customer,
-            as: "customer",
+            as: "logCustomer",
+            attributes: ["id", "CEP", "street", "number", "city", "state"],
           },
         ],
         order: [["createdAt", "DESC"]],
-        limit,
         offset,
+        limit,
       });
 
+
+      // Retorno
       return res.json({
         data: logs,
-        meta: {
-          total: count,
+        pagination: {
           page,
-          limit,
-          totalPages: Math.ceil(count / limit),
+          pageSize,
+          total,
+          totalPages: Math.ceil(total / pageSize),
         },
       });
     } catch (error) {
+      console.error(error);
       return res.status(500).json({
         message: "Erro ao listar logs",
       });

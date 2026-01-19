@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
-import { User } from "../models";
+import { Customer, User } from "../models";
 import { createLog } from "../services/log.service";
 import { TypeActivity } from "../enums/typeActivity";
 import { Page } from "../enums/page";
@@ -62,44 +62,92 @@ export class AuthController {
   }
 
   static async register(req: Request, res: Response) {
-    const { email, firstName, lastName, password, admin } = req.body;
+    try {
+      // dados do usuário
+      const { email, firstName, lastName, password, admin } = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({
-        message: "Email e senha são obrigatórios",
+      // dados do cliente
+      const {
+        CEP,
+        street,
+        number,
+        complement,
+        neighboor,
+        city,
+        state,
+      } = req.body;
+
+      if (!email || !password) {
+        return res.status(400).json({
+          message: "Email e senha são obrigatórios",
+        });
+      }
+
+      // verifica se usuário já existe
+      const userExists = await User.findOne({ where: { email } });
+      if (userExists) {
+        return res.status(409).json({
+          message: "Email já cadastrado",
+        });
+      }
+
+      // cria usuário
+      const user = await User.create({
+        email,
+        firstName,
+        lastName,
+        password,
+        admin: admin ?? false,
+      });
+
+      // cria cliente associado
+      const customer = await Customer.create({
+        CEP,
+        street,
+        number,
+        complement,
+        neighboor,
+        city,
+        state,
+        userId: user.id, // associa ao usuário criado
+      });
+
+      // registra log
+      createLog({
+        typeActivity: TypeActivity.CREATEACCOUNT,
+        page: Page.MYACCOUNT,
+        userId: user.id,
+      });
+
+      // retorna usuário + cliente
+      return res.status(201).json({
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        admin: user.admin,
+        customer: {
+          id: customer.id,
+          CEP: customer.CEP,
+          street: customer.street,
+          number: customer.number,
+          complement: customer.complement,
+          neighboor: customer.neighboor,
+          city: customer.city,
+          state: customer.state,
+        },
+      });
+
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({
+        message: "Erro ao criar usuário e cliente",
       });
     }
-
-    const userExists = await User.findOne({ where: { email } });
-
-    if (userExists) {
-      return res.status(409).json({
-        message: "Email já cadastrado",
-      });
-    }
-
-    const user = await User.create({
-      email,
-      firstName,
-      lastName,
-      password,
-      admin: admin ?? false,
-    });
-
-    createLog({
-      typeActivity: TypeActivity.CREATEACCOUNT,
-      page: Page.MYACCOUNT,
-      userId: user.id
-    })
-
-    return res.status(201).json({
-      id: user.id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      admin: user.admin,
-    });
   }
+
+
+
 
   static async logout(req: Request, res: Response) {
     return res.json({

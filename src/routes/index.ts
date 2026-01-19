@@ -5,6 +5,9 @@ import schedulingRoutes from "./scheduling.routes";
 import clientRoutes from './clients.routes'
 import roomRoutes from './room.routes'
 import logRoutes from "./log.routes";
+import scheduleTimeRoute from "./scheduleTime.routes";
+import userRoute from "./user.routes";
+
 
 const router = Router();
 
@@ -15,5 +18,8 @@ router.use("/schedule/backendserver/rooms", roomRoutes);
 router.use("/schedule/backendserver/clients", clientRoutes);
 router.use("/schedule/backendserver/schedules", schedulingRoutes);
 router.use("/schedule/backendserver/logs", logRoutes);
+
+router.use("/schedule/backendserver/scheduletime", scheduleTimeRoute);
+router.use("/schedule/backendserver/users", userRoute);
 
 export default router;

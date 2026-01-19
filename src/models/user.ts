@@ -1,6 +1,7 @@
 import { DataTypes, Model } from "sequelize";
 import bcrypt from "bcrypt";
 import { sequelize } from "../config/database";
+import { Customer } from "./customer";
 
 export class User extends Model {
   public id!: string;
@@ -9,6 +10,8 @@ export class User extends Model {
   public lastName!: string;
   public password!: string;
   public admin!: boolean;
+  public active!: boolean; // ✅ novo campo
+  public customers?: Customer[]; // alias do hasMany
 
   public async comparePassword(password: string) {
     return bcrypt.compare(password, this.password);
@@ -36,6 +39,11 @@ User.init(
     admin: {
       type: DataTypes.BOOLEAN,
       defaultValue: false,
+    },
+    active: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true, // ✅ padrão ativo
+      allowNull: false,
     },
   },
   {

@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { Response } from "express";
 import { Customer, User } from "../models";
 import { AuthRequest } from "../middlewares/auth.middleware";
 import { createLog } from "../services/log.service";
@@ -9,22 +9,13 @@ export class ClientController {
 
   static async create(req: AuthRequest, res: Response) {
     try {
-      const {
-        CEP,
-        street,
-        number,
-        complement,
-        neighboor,
-        city,
-        state,
-      } = req.body;
+      const { CEP, street, number, complement, neighboor, city, state } = req.body;
 
       if (!CEP || !street || !number || !city || !state) {
         return res.status(400).json({
           message: "Campos obrigatórios não informados",
         });
       }
-
 
       const client = await Customer.create({
         CEP,
@@ -39,6 +30,7 @@ export class ClientController {
 
       return res.status(201).json(client);
     } catch (error) {
+      console.error(error);
       return res.status(500).json({
         message: "Erro ao criar cliente",
       });
@@ -47,55 +39,86 @@ export class ClientController {
 
   static async list(req: AuthRequest, res: Response) {
     try {
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = (page - 1) * limit;
+      const page = parseInt(req.query.page as string) || 1;
+      const pageSize = parseInt(req.query.pageSize as string) || 20;
+      const offset = (page - 1) * pageSize;
+      const limit = pageSize;
 
-      const { rows: clients, count } = await Customer.findAndCountAll({
+      // Buscar clientes e incluir o usuário relacionado
+      const { rows: clients, count: total } = await Customer.findAndCountAll({
         where: { userId: req.user!.id },
+        include: [
+          {
+            model: User,
+            as: "user", // ⚠️ alias definido no belongsTo
+            attributes: ["id", "email", "firstName", "lastName", "active"],
+          },
+        ],
         order: [["createdAt", "DESC"]],
-        limit,
         offset,
+        limit,
       });
 
       return res.json({
         data: clients,
-        meta: {
-          total: count,
+        pagination: {
           page,
-          limit,
-          totalPages: Math.ceil(count / limit),
+          pageSize,
+          total,
+          totalPages: Math.ceil(total / pageSize),
         },
       });
     } catch (error) {
+      console.error(error);
       return res.status(500).json({
         message: "Erro ao listar clientes",
       });
     }
   }
 
+  static async getClientByUserId(req: AuthRequest, res: Response) {
+    try {
+      const userId = req.user!.id; // pegar userId do token
+      // Buscar cliente associado ao usuário
+      const client = await Customer.findOne({
+        where: { userId },
+        include: [
+          {
+            model: User,
+            as: "user", // ⚠️ o alias definido no belongsTo
+            attributes: ["id", "email", "firstName", "lastName", "active"],
+          },
+        ],
+      });
+
+      if (!client) {
+        return res.status(404).json({ message: "Cliente não encontrado" });
+      }
+
+      return res.json(client);
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ message: "Erro ao buscar cliente por usuário" });
+    }
+  }
+
+
   static async findById(req: AuthRequest, res: Response) {
     try {
       const { id } = req.params;
 
       const client = await Customer.findOne({
-        where: {
-          id,
-          userId: req.user!.id,
-        },
+        where: { id, userId: req.user!.id },
       });
 
       if (!client) {
-        return res.status(404).json({
-          message: "Cliente não encontrado",
-        });
+        return res.status(404).json({ message: "Cliente não encontrado" });
       }
 
       return res.json(client);
     } catch (error) {
-      return res.status(500).json({
-        message: "Erro ao buscar cliente",
-      });
+      console.error(error);
+      return res.status(500).json({ message: "Erro ao buscar cliente" });
     }
   }
 
@@ -103,40 +126,19 @@ export class ClientController {
     try {
       const { id } = req.params;
 
+      // Buscar cliente com o usuário associado
       const client = await Customer.findOne({
-        where: {
-          id,
-          userId: req.user!.id,
-        },
+        where: { id, userId: req.user!.id },
+        include: [{ model: User, as: "user" }],
       });
 
-      if (!client) {
-        return res.status(404).json({
-          message: "Cliente não encontrado",
-        });
-      }
-      const user = await User.findByPk(req.user!.id);
+      if (!client) return res.status(404).json({ message: "Cliente não encontrado" });
 
+      const { CEP, street, number, complement, neighboor, city, state, email, active } = req.body;
 
-      const {
-        CEP,
-        street,
-        number,
-        complement,
-        neighboor,
-        city,
-        state,
-        email,
-      } = req.body;
+      let typeActivity: TypeActivity | null = null;
 
-      if (!user) {
-        return res.status(404).json({
-          message: "Usuário não encontrado",
-        });
-      }
-
-      const emailChanged = email && email !== user.email;
-
+      // Atualizar endereço
       const addressFieldsChanged =
         (CEP && CEP !== client.CEP) ||
         (street && street !== client.street) ||
@@ -146,30 +148,17 @@ export class ClientController {
         (city && city !== client.city) ||
         (state && state !== client.state);
 
-
-      let typeActivity: TypeActivity | null = null;
-
-      if (emailChanged) {
-        typeActivity = TypeActivity.UPDATEEMAIL;
-      } else if (addressFieldsChanged) {
-        typeActivity = TypeActivity.UPDATEEMAIL;
-      }
-
       if (addressFieldsChanged) {
-        await client.update({
-          CEP,
-          street,
-          number,
-          complement,
-          neighboor,
-          city,
-          state,
-        });
+        await client.update({ CEP, street, number, complement, neighboor, city, state });
+        typeActivity = TypeActivity.UPDATEADRESS;
       }
 
-      if (emailChanged) {
-        await user.update({ email });
+      // Atualizar email
+      if (email && email !== client.user!.email) {
+        await client.user!.update({ email });
+        typeActivity = TypeActivity.UPDATEEMAIL;
       }
+
 
 
       if (typeActivity) {
@@ -179,11 +168,11 @@ export class ClientController {
           userId: req.user!.id,
         });
       }
+
       return res.json(client);
     } catch (error) {
-      return res.status(500).json({
-        message: "Erro ao atualizar cliente",
-      });
+      console.error(error);
+      return res.status(500).json({ message: "Erro ao atualizar cliente" });
     }
   }
 
@@ -191,26 +180,14 @@ export class ClientController {
     try {
       const { id } = req.params;
 
-      const client = await Customer.findOne({
-        where: {
-          id,
-          userId: req.user!.id,
-        },
-      });
-
-      if (!client) {
-        return res.status(404).json({
-          message: "Cliente não encontrado",
-        });
-      }
+      const client = await Customer.findOne({ where: { id, userId: req.user!.id } });
+      if (!client) return res.status(404).json({ message: "Cliente não encontrado" });
 
       await client.destroy();
-
       return res.status(204).send();
     } catch (error) {
-      return res.status(500).json({
-        message: "Erro ao deletar cliente",
-      });
+      console.error(error);
+      return res.status(500).json({ message: "Erro ao deletar cliente" });
     }
   }
 }

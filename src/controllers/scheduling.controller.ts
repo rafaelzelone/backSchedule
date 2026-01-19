@@ -1,7 +1,7 @@
 import { Response } from "express";
 import { Op } from "sequelize";
 import { AuthRequest } from "../middlewares/auth.middleware";
-import { Scheduling, Customer, Room, Log } from "../models";
+import { Scheduling, Customer, Room, Log, ScheduleTime } from "../models";
 import { Status } from "../enums/status";
 import { TypeActivity } from "../enums/typeActivity";
 import { Page } from "../enums/page";
@@ -32,13 +32,12 @@ export class SchedulingController {
         });
       }
 
+      // Verifica conflito de agendamento existente
       const conflict = await Scheduling.findOne({
         where: {
           roomId,
           date,
-          status: {
-            [Op.not]: Status.CANCELED,
-          },
+          status: { [Op.not]: Status.CANCELED },
         },
       });
 
@@ -48,12 +47,34 @@ export class SchedulingController {
         });
       }
 
+      // ==== NOVO: verifica se existe scheduleTime válido ====
+      const scheduleDate = new Date(date);
+      const dayOfWeek = scheduleDate.getDay(); // 0 = Domingo, 1 = Segunda, ...
+      const time = scheduleDate.toTimeString().split(" ")[0]; // "HH:MM:SS"
+
+      const validScheduleTime = await ScheduleTime.findOne({
+        where: {
+          roomId,
+          dayOfWeek,
+          startTime: { [Op.lte]: time },
+          endTime: { [Op.gte]: time },
+        },
+      });
+
+      if (!validScheduleTime) {
+        return res.status(400).json({
+          message: "A sala não possui horário disponível para este agendamento",
+        });
+      }
+      // ========================================================
+
       const scheduling = await Scheduling.create({
         date,
         clientId,
         roomId,
         status: Status.PEDDING,
       });
+
       await createLog({
         typeActivity: TypeActivity.CREATESCHEDULE,
         page: Page.SCHEDULE,
@@ -62,25 +83,42 @@ export class SchedulingController {
 
       return res.status(201).json(scheduling);
     } catch (error) {
+      console.error(error);
       return res.status(500).json({
         message: "Erro ao criar agendamento",
       });
     }
   }
 
-
   static async list(req: AuthRequest, res: Response) {
     try {
       const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = (page - 1) * limit;
+      const pageSize = Number(req.query.pageSize) || 10;
+      const offset = (page - 1) * pageSize;
 
-      const { rows: schedulings, count } = await Scheduling.findAndCountAll({
+      const isAdmin = req.user!.admin;
+
+      const { customerName, date } = req.query;
+
+      // filtro do customer
+      const whereCustomer: any = isAdmin ? {} : { userId: req.user!.id };
+      if (customerName) {
+        whereCustomer.name = { [Op.iLike]: `%${customerName}%` }; // filtro por nome (case-insensitive)
+      }
+
+      // filtro do scheduling
+      const whereScheduling: any = {};
+      if (date) {
+        whereScheduling.date = date; // filtra pelo dia exato
+      }
+
+      const { rows, count } = await Scheduling.findAndCountAll({
+        where: whereScheduling,
         include: [
           {
             model: Customer,
             as: "customer",
-            where: { userId: req.user!.id },
+            where: whereCustomer,
           },
           {
             model: Room,
@@ -88,18 +126,19 @@ export class SchedulingController {
           },
         ],
         order: [["date", "ASC"]],
-        limit,
+        limit: pageSize,
         offset,
       });
 
       return res.json({
-        data: schedulings,
-        meta: {
-          total: count,
+        data: rows,
+        pagination: {
           page,
-          limit,
-          totalPages: Math.ceil(count / limit),
+          pageSize,
+          total: count,
+          totalPages: Math.ceil(count / pageSize),
         },
+        isAdmin,
       });
     } catch (error) {
       return res.status(500).json({
@@ -107,6 +146,7 @@ export class SchedulingController {
       });
     }
   }
+
 
 
   static async confirm(req: AuthRequest, res: Response) {
