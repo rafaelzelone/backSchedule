@@ -14,9 +14,21 @@ export class SchedulingController {
       const { date, roomId } = req.body;
 
 
-      if (!date || req.user!.id || !roomId) {
+      if (!date) {
         return res.status(400).json({
-          message: "Data, cliente e sala são obrigatórios",
+          message: "Data são obrigatório",
+        });
+      }
+
+      if(req.user!.id){
+             return res.status(400).json({
+          message: "Cliente são obrigatório",
+        });
+      }
+
+      if (!roomId){
+     return res.status(400).json({
+          message: "sala são obrigatório",
         });
       }
 
