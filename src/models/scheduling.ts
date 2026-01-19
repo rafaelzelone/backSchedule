@@ -40,13 +40,3 @@ Scheduling.init(
   },
   { sequelize, tableName: "schedules" }
 );
-
-Scheduling.belongsTo(Customer, {
-  foreignKey: "customerId",
-  as: "customer",
-});
-
-Scheduling.belongsTo(Room, {
-  foreignKey: "roomId",
-  as: "room",
-});
