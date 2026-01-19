@@ -20,14 +20,14 @@ export class SchedulingController {
         });
       }
 
-      if(req.user!.id){
-             return res.status(400).json({
+      if (!req.user || !req.user.id) {
+        return res.status(400).json({
           message: "Cliente são obrigatório",
         });
       }
 
-      if (!roomId){
-     return res.status(400).json({
+      if (!roomId) {
+        return res.status(400).json({
           message: "sala são obrigatório",
         });
       }
@@ -59,7 +59,7 @@ export class SchedulingController {
       }
 
       const scheduleDate = new Date(date);
-      const dayOfWeek = scheduleDate.getDay(); 
+      const dayOfWeek = scheduleDate.getDay();
       const time = scheduleDate.toTimeString().split(" ")[0];
 
       const validScheduleTime = await ScheduleTime.findOne({
