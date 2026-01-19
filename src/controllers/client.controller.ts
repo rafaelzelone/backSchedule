@@ -47,12 +47,26 @@ export class ClientController {
 
   static async list(req: AuthRequest, res: Response) {
     try {
-      const clients = await Customer.findAll({
+      const page = Number(req.query.page) || 1;
+      const limit = Number(req.query.limit) || 10;
+      const offset = (page - 1) * limit;
+
+      const { rows: clients, count } = await Customer.findAndCountAll({
         where: { userId: req.user!.id },
         order: [["createdAt", "DESC"]],
+        limit,
+        offset,
       });
 
-      return res.json(clients);
+      return res.json({
+        data: clients,
+        meta: {
+          total: count,
+          page,
+          limit,
+          totalPages: Math.ceil(count / limit),
+        },
+      });
     } catch (error) {
       return res.status(500).json({
         message: "Erro ao listar clientes",

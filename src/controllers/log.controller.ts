@@ -12,7 +12,11 @@ export class LogController {
         });
       }
 
-      const logs = await Log.findAll({
+      const page = Number(req.query.page) || 1;
+      const limit = Number(req.query.limit) || 10;
+      const offset = (page - 1) * limit;
+
+      const { rows: logs, count } = await Log.findAndCountAll({
         include: [
           {
             model: Customer,
@@ -20,13 +24,24 @@ export class LogController {
           },
         ],
         order: [["createdAt", "DESC"]],
+        limit,
+        offset,
       });
 
-      return res.json(logs);
+      return res.json({
+        data: logs,
+        meta: {
+          total: count,
+          page,
+          limit,
+          totalPages: Math.ceil(count / limit),
+        },
+      });
     } catch (error) {
       return res.status(500).json({
         message: "Erro ao listar logs",
       });
     }
   }
+
 }
