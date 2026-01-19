@@ -1,7 +1,7 @@
 import { Response } from "express";
 import { Op } from "sequelize";
 import { AuthRequest } from "../middlewares/auth.middleware";
-import { Scheduling, Customer, Room, ScheduleTime } from "../models";
+import { Scheduling, Customer, Room, ScheduleTime, User } from "../models";
 import { Status } from "../enums/status";
 import { TypeActivity } from "../enums/typeActivity";
 import { Page } from "../enums/page";
@@ -11,7 +11,7 @@ export class SchedulingController {
 
   static async create(req: AuthRequest, res: Response) {
     try {
-      const { date, roomId } = req.body;
+      const { date, roomId, time } = req.body;
 
 
       if (!date) {
@@ -31,7 +31,13 @@ export class SchedulingController {
           message: "sala são obrigatório",
         });
       }
+      if (!time) {
+        return res.status(400).json({
+          message: "Horário é obrigatório",
+        });
+      }
 
+      const scheduleTime = `${time}:00`;
       const client = await Customer.findOne({
         where: {
           userId: req.user!.id
@@ -44,30 +50,11 @@ export class SchedulingController {
         });
       }
 
-      const conflict = await Scheduling.findOne({
-        where: {
-          roomId,
-          date,
-          status: { [Op.not]: Status.CANCELED },
-        },
-      });
-
-      if (conflict) {
-        return res.status(409).json({
-          message: "Já existe um agendamento para esta sala nesse horário",
-        });
-      }
-
-      const scheduleDate = new Date(date);
-      const dayOfWeek = scheduleDate.getDay();
-      const time = scheduleDate.toTimeString().split(" ")[0];
-
       const validScheduleTime = await ScheduleTime.findOne({
         where: {
           roomId,
-          dayOfWeek,
-          startTime: { [Op.lte]: time },
-          endTime: { [Op.gte]: time },
+          startTime: { [Op.lte]: scheduleTime },
+          endTime: { [Op.gte]: scheduleTime },
         },
       });
 
@@ -76,10 +63,46 @@ export class SchedulingController {
           message: "A sala não possui horário disponível para este agendamento",
         });
       }
+      const startDateTime = new Date(`${date}T${time}:00`);
+      const blockMinutes = validScheduleTime.blockMinutes;
+      const endDateTime = new Date(startDateTime);
+      endDateTime.setMinutes(endDateTime.getMinutes() + blockMinutes);
+      const sameDayStart = new Date(startDateTime);
+      sameDayStart.setHours(0, 0, 0, 0);
+
+      const sameDayEnd = new Date(startDateTime);
+      sameDayEnd.setHours(23, 59, 59, 999);
+
+      const schedules = await Scheduling.findAll({
+        where: {
+          roomId,
+          status: { [Op.not]: Status.CANCELED },
+          date: {
+            [Op.between]: [sameDayStart, sameDayEnd],
+          },
+        },
+      });
+      const hasConflict = schedules.some((s) => {
+        const existingStart = new Date(s.date);
+        const existingEnd = new Date(existingStart);
+        existingEnd.setMinutes(existingEnd.getMinutes() + blockMinutes);
+
+        return (
+          existingStart < endDateTime &&
+          existingEnd > startDateTime
+        );
+      });
+
+      if (hasConflict) {
+        return res.status(409).json({
+          message: "Já existe um agendamento para esta sala nesse horário",
+        });
+      }
+
 
       const scheduling = await Scheduling.create({
-        date,
-        client,
+        date: startDateTime,
+        customerId: client.id,
         roomId,
         status: Status.PEDDING,
       });
@@ -101,32 +124,49 @@ export class SchedulingController {
 
   static async list(req: AuthRequest, res: Response) {
     try {
+      const { customerName, date } = req.query;
+
       const page = Number(req.query.page) || 1;
       const pageSize = Number(req.query.pageSize) || 10;
       const offset = (page - 1) * pageSize;
 
       const isAdmin = req.user!.admin;
 
-      const { customerName, date } = req.query;
+      const client = await Customer.findOne({
+        where: { userId: req.user!.id },
+      });
 
-      const whereCustomer: any = isAdmin ? {} : { userId: req.user!.id };
-      if (customerName) {
-        whereCustomer.name = { [Op.iLike]: `%${customerName}%` };
+      if (!isAdmin && !client) {
+        return res.status(400).json({
+          message: "Cliente não encontrado para o usuário",
+        });
       }
 
       const whereScheduling: any = {};
-      if (date) {
-        whereScheduling.date = date;
+      if (date) whereScheduling.date = date;
+      if (!isAdmin) whereScheduling.customerId = client!.id;
+      const customerInclude: any = {
+        model: Customer,
+        as: "customer",
+        include: [
+          {
+            model: User,
+            as: "user",
+            attributes: ["id", "email", "firstName", "lastName"],
+          },
+        ],
+      };
+
+      if (customerName) {
+        customerInclude.where = {
+          name: { [Op.iLike]: `%${customerName}%` },
+        };
       }
 
       const { rows, count } = await Scheduling.findAndCountAll({
         where: whereScheduling,
         include: [
-          {
-            model: Customer,
-            as: "customer",
-            where: whereCustomer,
-          },
+          customerInclude,
           {
             model: Room,
             as: "room",
@@ -148,12 +188,12 @@ export class SchedulingController {
         isAdmin,
       });
     } catch (error) {
+      console.error(error);
       return res.status(500).json({
         message: "Erro ao listar agendamentos",
       });
     }
   }
-
 
 
   static async confirm(req: AuthRequest, res: Response) {

@@ -10,8 +10,10 @@ export class User extends Model {
   public lastName!: string;
   public password!: string;
   public admin!: boolean;
-  public active!: boolean; // ✅ novo campo
-  public customers?: Customer[]; // alias do hasMany
+  public log!: boolean;
+  public schedule!: boolean;
+  public active!: boolean;
+  public customers?: Customer[]; 
 
   public async comparePassword(password: string) {
     return bcrypt.compare(password, this.password);
@@ -40,9 +42,17 @@ User.init(
       type: DataTypes.BOOLEAN,
       defaultValue: false,
     },
+    schedule: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true,
+    },
+    log: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
     active: {
       type: DataTypes.BOOLEAN,
-      defaultValue: true, // ✅ padrão ativo
+      defaultValue: true,
       allowNull: false,
     },
   },

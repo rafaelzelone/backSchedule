@@ -63,10 +63,8 @@ export class AuthController {
 
   static async register(req: Request, res: Response) {
     try {
-      // dados do usuário
       const { email, firstName, lastName, password, admin } = req.body;
 
-      // dados do cliente
       const {
         CEP,
         street,
@@ -83,7 +81,6 @@ export class AuthController {
         });
       }
 
-      // verifica se usuário já existe
       const userExists = await User.findOne({ where: { email } });
       if (userExists) {
         return res.status(409).json({
@@ -91,7 +88,6 @@ export class AuthController {
         });
       }
 
-      // cria usuário
       const user = await User.create({
         email,
         firstName,
@@ -100,7 +96,6 @@ export class AuthController {
         admin: admin ?? false,
       });
 
-      // cria cliente associado
       const customer = await Customer.create({
         CEP,
         street,
@@ -109,17 +104,15 @@ export class AuthController {
         neighboor,
         city,
         state,
-        userId: user.id, // associa ao usuário criado
+        userId: user.id,
       });
 
-      // registra log
       createLog({
         typeActivity: TypeActivity.CREATEACCOUNT,
         page: Page.MYACCOUNT,
         userId: user.id,
       });
 
-      // retorna usuário + cliente
       return res.status(201).json({
         id: user.id,
         email: user.email,

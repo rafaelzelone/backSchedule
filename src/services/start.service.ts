@@ -8,7 +8,7 @@ export async function start(app: any) {
     await sequelize.sync({ alter: true });
     console.log("🛠️ Tabelas sincronizadas");
 
-    app.listen(3000, () => {
+    app.listen(21103, () => {
       console.log("🚀 Server rodando");
     });
   } catch (error) {

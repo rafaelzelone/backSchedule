@@ -4,6 +4,7 @@ import { AuthRequest } from "../middlewares/auth.middleware";
 import { createLog } from "../services/log.service";
 import { Page } from "../enums/page";
 import { TypeActivity } from "../enums/typeActivity";
+import { Op } from "sequelize";
 
 export class ClientController {
 
@@ -44,13 +45,27 @@ export class ClientController {
       const offset = (page - 1) * pageSize;
       const limit = pageSize;
 
+      const { search } = req.query;
+
+      const where: any = {};
+
+      if (!req.user!.admin) {
+        where.userId = req.user!.id;
+      }
+      if (search) {
+        where[Op.or] = [
+          { name: { [Op.iLike]: `%${search}%` } },
+          { email: { [Op.iLike]: `%${search}%` } },
+        ];
+      }
+
       const { rows: clients, count: total } = await Customer.findAndCountAll({
-        where: { userId: req.user!.id },
+        where,
         include: [
           {
             model: User,
             as: "user",
-            attributes: ["id", "email", "firstName", "lastName", "active"],
+            attributes: ["id", "email", "firstName", "lastName", "active", "log", "schedule"],
           },
         ],
         order: [["createdAt", "DESC"]],
@@ -74,6 +89,7 @@ export class ClientController {
       });
     }
   }
+
 
   static async getClientByUserId(req: AuthRequest, res: Response) {
     try {
@@ -125,13 +141,13 @@ export class ClientController {
       const { id } = req.params;
 
       const client = await Customer.findOne({
-        where: { id, userId: req.user!.id },
+        where: { id },
         include: [{ model: User, as: "user" }],
       });
 
       if (!client) return res.status(404).json({ message: "Cliente não encontrado" });
 
-      const { CEP, street, number, complement, neighboor, city, state, email, active } = req.body;
+      const { CEP, street, number, complement, neighboor, city, state, email, active, log, schedule } = req.body;
 
       let typeActivity: TypeActivity | null = null;
 
@@ -152,6 +168,31 @@ export class ClientController {
       if (email && email !== client.user!.email) {
         await client.user!.update({ email });
         typeActivity = TypeActivity.UPDATEEMAIL;
+      }
+
+      if (client.user) {
+        const userUpdates: Partial<User> = {};
+
+        if (email && email !== client.user.email) {
+          userUpdates.email = email;
+          typeActivity = TypeActivity.UPDATEEMAIL;
+        }
+
+        if (typeof active === "boolean" && active !== client.user.active) {
+          userUpdates.active = active;
+        }
+
+        if (typeof log === "boolean" && log !== client.user.log) {
+          userUpdates.log = log;
+        }
+
+        if (typeof schedule === "boolean" && schedule !== client.user.schedule) {
+          userUpdates.schedule = schedule;
+        }
+
+        if (Object.keys(userUpdates).length > 0) {
+          await client.user.update(userUpdates);
+        }
       }
 
       if (typeActivity) {
