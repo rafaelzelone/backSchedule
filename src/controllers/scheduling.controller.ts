@@ -1,7 +1,7 @@
 import { Response } from "express";
 import { Op } from "sequelize";
 import { AuthRequest } from "../middlewares/auth.middleware";
-import { Scheduling, Customer, Room, Log, ScheduleTime } from "../models";
+import { Scheduling, Customer, Room, ScheduleTime } from "../models";
 import { Status } from "../enums/status";
 import { TypeActivity } from "../enums/typeActivity";
 import { Page } from "../enums/page";
@@ -64,11 +64,10 @@ export class SchedulingController {
           message: "A sala não possui horário disponível para este agendamento",
         });
       }
-      // ========================================================
 
       const scheduling = await Scheduling.create({
         date,
-        clientId,
+        client,
         roomId,
         status: Status.PEDDING,
       });
@@ -98,16 +97,14 @@ export class SchedulingController {
 
       const { customerName, date } = req.query;
 
-      // filtro do customer
       const whereCustomer: any = isAdmin ? {} : { userId: req.user!.id };
       if (customerName) {
-        whereCustomer.name = { [Op.iLike]: `%${customerName}%` }; // filtro por nome (case-insensitive)
+        whereCustomer.name = { [Op.iLike]: `%${customerName}%` };
       }
 
-      // filtro do scheduling
       const whereScheduling: any = {};
       if (date) {
-        whereScheduling.date = date; // filtra pelo dia exato
+        whereScheduling.date = date;
       }
 
       const { rows, count } = await Scheduling.findAndCountAll({
